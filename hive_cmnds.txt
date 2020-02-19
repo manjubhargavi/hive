@@ -1,0 +1,321 @@
+hdfs dfs -put /hirw-workshop/input/stocks-dataset/stocks/* input/hive/stocks_db
+input=  input/hive/stocks_db
+CREATE DATABASE user1394;
+
+USE user1394; 
+
+CREATE TABLE IF NOT EXISTS st(
+exch STRING,
+sym STRING,
+open FLOAT,
+high FLOAT,
+low FLOAT,
+close FLOAT,
+VOL INT,
+adj_cl FLOAT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',';
+
+LOAD DATA INPATH 'input/hive/stocks_db' INTO TABLE st;
+
+ DESCRIBE FORMATTED st;
+ 
+  DROP TABLE st;
+-----------------------------------------------------------------------------------  
+CREATE TABLE IF NOT EXISTS st1(
+exch STRING,
+sym STRING,
+yr STRING,
+open FLOAT,
+high FLOAT,
+low FLOAT,
+close FLOAT,
+VOL INT,
+adj_cl FLOAT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',';
+ INSERT OVERWRITE TABLE st1
+    > SELECT * FROM st;
+	
+-----------------------------------------------------------------
+	CREATE TABLE IF NOT EXISTS st2(
+exch STRING,
+sym STRING,
+yr STRING,
+open FLOAT,
+high FLOAT,
+low FLOAT,
+close FLOAT,
+VOL INT,
+adj_cl FLOAT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+LOCATION '/user/hirwuser1394/input/hive/stocks_db';
+-------------------------------------
+CREATE TABLE st3 AS
+SELECT * st1;
+
+Select * from st3 limit 10;
+
+(order by no of reducer 1)
+ Select * from st3
+    > ORDER BY sym DESC;
+Query ID = hirwuser1394_20190903194545_677abde9-bbdd-46dc-ab24-838c90c3367a
+Total jobs = 1
+Launching Job 1 out of 1
+Number of reduce tasks determined at compile time: 1
+----------------------------------------------------------------------
+Sort by can change no of mapreducer
+SET mapreduce.job.reduces=3;
+
+Select * from st1
+where yr ='2003'
+Sort by sym DESC ;
+
+INSERT OVERWRITE LOCAL DIRECTORY 'home/hirw/output/stocks'
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+Select * from st1
+where year(yr) ='2003'
+Distribute by sym
+Sort by sym DESC;
+
+INSERT OVERWRITE LOCAL DIRECTORY 'home/hirw/output/stocks'
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+Select * from st1
+where year(yr) ='2003'
+CLUSTER by sym DESC ;
+
+-----------------------------------------------------------------------------
+partition table 
+
+CREATE TABLE IF NOT EXISTS st_part(
+exch STRING,
+sym STRING,
+yr STRING,
+open FLOAT,
+high FLOAT,
+low FLOAT,
+close FLOAT,
+VOL INT,
+adj_cl FLOAT)
+PARTITIONED BY (sym_p STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ;
+
+ DESCRIBE FORMATTED st_part;
+OK
+# col_name              data_type               comment
+
+exch                    string
+sym                     string
+yr                      string
+open                    float
+high                    float
+low                     float
+close                   float
+vol                     int
+adj_cl                  float
+
+# Partition Information
+# col_name              data_type               comment
+
+sym_p                   string
+
+# Detailed Table Information
+Database:               user1394
+Owner:                  hirwuser1394
+CreateTime:             Wed Sep 04 18:14:53 UTC 2019
+LastAccessTime:         UNKNOWN
+Protect Mode:           None
+Retention:              0
+Location:               hdfs://ip-172-31-45-216.ec2.internal:8020/user/hive/warehouse/user1394.db/st_part
+Table Type:             MANAGED_TABLE
+Table Parameters:
+        transient_lastDdlTime   1567620893
+
+# Storage Information
+SerDe Library:          org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+InputFormat:            org.apache.hadoop.mapred.TextInputFormat
+OutputFormat:           org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+Compressed:             No
+Num Buckets:            -1
+Bucket Columns:         []
+Sort Columns:           []
+Storage Desc Params:
+        field.delim             ,
+        serialization.format    ,
+Time taken: 0.151 seconds, Fetched: 40 row(s)
+
+
+INSERT OVERWRITE TABLE st_part
+PARTITION (sym_p ='BB3')
+SELECT * FROM st1 s
+WHERE s.sym ='BB3';
+
+
+INSERT OVERWRITE TABLE st_part
+PARTITION (sym_p ='B7J')
+SELECT * FROM st1 s
+WHERE s.sym ='B7J';
+
+FROM st1 s
+INSERT OVERWRITE TABLE st_part
+PARTITION (sym_p ='BUW')
+SELECT s.* WHERE s.sym='BUW'
+INSERT OVERWRITE TABLE st_part
+PARTITION (sym_p='BUY')
+SELECT s.* WHERE s.sym='BUY';
+
+!hdfs dfs -ls /user/hive/warehouse/user1394.db/st_part
+    > ;
+Found 4 items
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 18:19 /user/hive/warehouse/user1394.db/st_part/sym_p=B7J
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 18:16 /user/hive/warehouse/user1394.db/st_part/sym_p=BB3
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 18:29 /user/hive/warehouse/user1394.db/st_part/sym_p=BUW
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 18:29 /user/hive/warehouse/user1394.db/st_part/sym_p=BUY
+
+INSERT OVERWRITE DIRECTORY 'input/hive/sym_BVR'
+SELECT * FROM st1
+WHERE sym = 'BVR';
+
+ALTER TABLE st_part
+ADD IF NOT EXISTS PARTITION(sym_p = 'BVR') LOCATION 'input/hive/sym_BVR/000000_0';
+SHOW PARTITIONS st_part;
+OK
+sym_p=B7J
+sym_p=BB3
+sym_p=BUW
+sym_p=BUY
+sym_p=BVR
+
+INSERT OVERWRITE TABLE st_part
+PARTITION (sym_p ='BVR')
+SELECT * FROM st1 s
+WHERE s.sym ='BVR';
+---------------------------------------------------------------------------------------------
+
+ SET hive.exec.dynamic.partition=true;
+hive> INSERT OVERWRITE TABLE st_part
+    > PARTITION (sym_p)
+    > SELECT s.*,s.sym
+    > FROM st1 s;
+FAILED: SemanticException [Error 10096]: Dynamic partition strict mode requires at least one static partition column. To turn this off set hive.exec.dynamic.partition.mode=nonstrict
+
+CREATE TABLE IF NOT EXISTS st_part_dy(
+exch STRING,
+sym STRING,
+yr STRING,
+open FLOAT,
+high FLOAT,
+low FLOAT,
+close FLOAT,
+VOL INT,
+adj_cl FLOAT)
+PARTITIONED BY (exch_p STRING,yr_p STRING,sym_p STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ;
+
+INSERT OVERWRITE TABLE st_part_dy
+PARTITION (exch_p = 'ABCSE',yr_p,sym_p)
+SELECT s.*, YEAR(s.yr), s.sym 
+FROM st1 s
+WHERE YEAR(s.yr) IN ('2001','2002','2003') AND s.sym LIKE 'B%';
+
+ Fatal error occurred when node tried to create too many dynamic partitions. The maximum number of dynamic partitions is controlled by hive.exec.max.dynamic.partitions and hive.exec.max.dynamic.partitions.pernode. Maximum was set to: 100
+ 
+SET hive.exec.max.dynamic.partitions=1000;
+SET hive.exec.max.dynamic.partitions.pernode=500; 
+------------------------------------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS st_buck(
+exch STRING,
+sym STRING,
+yr STRING,
+open FLOAT,
+high FLOAT,
+low FLOAT,
+close FLOAT,
+VOL INT,
+adj_cl FLOAT)
+PARTITIONED BY (exch_p STRING,yr_p STRING)
+CLUSTERED BY (sym) INTO 5 BUCKETS
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' ;
+
+SET hive.enforce.bucketing = true;
+
+INSERT OVERWRITE TABLE st_buck
+PARTITION (exch_p='ABCSE',yr_p)
+SELECT s.*,YEAR(yr)
+FROM st1 s
+WHERE YEAR(s.yr) IN ('2002','2003','2004') AND sym LIKE 'B%';
+	
+!hdfs dfs -ls /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/;
+Found 3 items
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 19:47 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 19:47 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2003
+drwxrwxrwt   - hirwuser1394 hive          0 2019-09-04 19:47 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2004
+
+ !hdfs dfs -ls  /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002;
+Found 5 items
+-rwxrwxrwt   3 hirwuser1394 hive     614192 2019-09-04 20:07 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002/000000_0
+-rwxrwxrwt   3 hirwuser1394 hive     888570 2019-09-04 20:08 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002/000001_0
+-rwxrwxrwt   3 hirwuser1394 hive    1021300 2019-09-04 20:08 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002/000002_0
+-rwxrwxrwt   3 hirwuser1394 hive     869977 2019-09-04 20:08 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002/000003_0
+-rwxrwxrwt   3 hirwuser1394 hive     727044 2019-09-04 20:08 /user/hive/warehouse/user1394.db/st_buck/exch_p=ABCSE/yr_p=2002/000004_0
+----------------------------------------------------------------------------------------------------
+CREATE EXTERNAL TABLE IF NOT EXISTS dividends(
+exch STRING,
+yr STRING,
+symbol STRING,
+divi FLOAT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+LOCATION '/user/hirwuser1394/input/hive/divi';
+
+/user/hirwuser1394/
+
+SELECT s.sym, s.yr, d.divi
+FROM st1 s INNER JOIN dividends d
+ON s.sym = d.symbol;
+
+SELECT s.* ,d.*
+FROM st1 s LEFT OUTER JOIN dividends d
+ON s.sym = d.symbol LIMIT 10;
+ABCSE   BL3     1991-04-23      3.99    4.05    3.99    4.05    129200  0.71    NULL    NULL    NULL    NULL
+ABCSE   BL3     1991-04-22      4.05    4.05    3.99    3.99    152300  0.7     NULL    NULL    NULL    NULL
+ABCSE   B7J     2010-02-08      8.63    8.7     8.57    8.64    78900   8.64    ABCSE   28-9-2009       B7J     23.4
+ABCSE   B7J     2010-02-05      8.63    8.71    8.31    8.58    218700  8.58    ABCSE   28-9-2009       B7J     23.4
+
+SELECT s.* ,d.*
+FROM st1 s LEFT OUTER JOIN dividends d
+ON s.sym = d.symbol
+WHERE d.symbol IS NOT NULL AND d.exch IS NOT NULL AND d.exch IS NOT NULL AND d.yr IS NOT NULL;
+
+ABCSE   BUY     1998-07-09      19.0    19.25   19.0    19.19   212200  9.59    ABCSE   12-10-2003      BUY     34.6
+ABCSE   BUY     1998-07-08      19.31   19.31   19.0    19.0    452200  9.5     ABCSE   12-10-2003      BUY     34.6
+
+SELECT s.* ,d.*
+FROM st1 s RIGHT OUTER JOIN dividends d
+ON s.sym = d.symbol;
+
+ABCSE   B7J     1970-11-17      38.0    39.75   38.0    38.63   2477600 0.21    ABCSE   28-9-2009       B7J     23.4
+ABCSE   B7J     1970-11-18      38.0    38.0    37.5    37.5    1846400 0.2     ABCSE   28-9-2009       B7J     23.4
+
+
+SELECT *
+FROM st1 s RIGHT OUTER JOIN dividends d
+ON s.sym = d.symbol;
+
+SELECT * 
+FROM st1 s CROSS JOIN dividends d
+ON s.sym = d.symbol
+WHERE d.symbol IS NOT NULL;
+
+SELECT * 
+FROM st1 s CROSS JOIN dividends d
+ON s.sym = d.symbol
+WHERE s.yr < d.yr;
+
+ABCSE   B7J     1970-01-28      39.0    39.0    38.25   38.38   1869600 0.2     ABCSE   28-9-2009       B7J     23.4
+ABCSE   B7J     1970-01-27      39.0    39.13   38.75   39.0    1853600 0.21    ABCSE   28-9-2009       B7J     23.4
+
+CREATE EXTERNAL TABLE multjoinsymbol(
+sym STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+LOCATION '/user/hirwuser1394/input/hive/multijoinsybol/*';
+
+SELECT s.*
+FROM st1 s JOIN dividends d ON (s.sym = d.symbol) JOIN multjoinsymbol m ON(d.symbol = m.sym);
